@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تجربة دوال التحليل</title>
+  <script src="parseExcelText.js"></script>
+  <script src="groupByBranch.js"></script>
+  <script src="branchAnalyzers.js"></script>
+  <script src="analyzeItem.js"></script>
+  <script src="analyzeData.js"></script>
+  <!-- مكتبتا تصدير PDF (تعملان بالكامل من المتصفح، بدون أي سيرفر) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- مكتبة تصدير Excel (ملف xlsx حقيقي يدعم تضمين الصور، تعمل بالكامل من المتصفح) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ══════════════════════════════════════════════════════════════════
+       وضع تصدير PDF — يُفعَّل مؤقتاً أثناء التقاط التقرير فقط
+       (يُضاف صنف pdf-export-mode على body، ويُزال بعد انتهاء التصدير)
+       ══════════════════════════════════════════════════════════════════ */
+    body.pdf-export-mode #cardInput,
+    body.pdf-export-mode h1,
+    body.pdf-export-mode .pipeline,
+    body.pdf-export-mode .divider,
+    body.pdf-export-mode .stats,
+    body.pdf-export-mode .item-tabs,
+    body.pdf-export-mode .view-bar,
+    body.pdf-export-mode .export-bar {
+      display: none !important;
+    }
+
+    body.pdf-export-mode #resultSection {
+      display: block !important;
+    }
+
+    body.pdf-export-mode #viewCards,
+    body.pdf-export-mode #viewJson {
+      display: none !important;
+    }
+
+    body.pdf-export-mode #viewTable {
+      display: block !important;
+    }
+
+    /* أثناء التصدير: لا داعي لمظهر "قابل للتحرير" على سطر الملاحظة */
+    body.pdf-export-mode .note-text {
+      cursor: default;
+    }
+
+    body.pdf-export-mode #flatTableWrap {
+      background: #ffffff;
+    }
+
+    /* المشكلة: الجدول أعرض من الحاوية فيظهر بشريط تمرير أفقي، فتُقتَطع الأعمدة
+       الأخيرة عند الالتقاط. نُلغي أي تمرير/تحديد عرض وقت التصدير فقط، لنسمح
+       للتقرير أن يظهر بعرضه الطبيعي الكامل، ونبني حجم صفحة PDF مطابق لهذا العرض. */
+    body.pdf-export-mode #cardOutput {
+      overflow: visible !important;
+      max-width: none !important;
+      width: max-content !important;
+    }
+
+    body.pdf-export-mode #flatTableWrap {
+      overflow: visible !important;
+      width: max-content !important;
+      max-width: none !important;
+    }
+
+    body.pdf-export-mode .item-table-wrap {
+      overflow: visible !important;
+      width: max-content !important;
+      max-width: none !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+
+    body.pdf-export-mode .flat-table {
+      width: auto !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>🔬 تجربة دوال التحليل الكاملة</h1>
+
+  <!-- Input -->
+  <div class="card" id="cardInput">
+    <label>الصق هنا النص المنسوخ من Excel</label>
+    <textarea id="inputText" placeholder="انسخ الجدول من Excel ثم الصقه هنا..."></textarea>
+    <label for="taxPercentInput">نسبة الضريبة %</label>
+    <input type="number" id="taxPercentInput" value="5" min="0" step="0.1">
+    <div class="actions">
+      <button id="btnRun">تشغيل</button>
+      <button id="btnClear">مسح</button>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="card" id="cardOutput">
+
+    <!-- Pipeline indicator -->
+    <div class="pipeline">
+      <div class="step" id="s1">parseExcelText</div>
+      <div class="arrow">›</div>
+      <div class="step" id="s2">groupByCode</div>
+      <div class="arrow">›</div>
+      <div class="step" id="s3">analyzeData</div>
+    </div>
+
+    <div id="placeholder">الناتج سيظهر هنا بعد الضغط على «تشغيل»</div>
+
+    <div id="resultSection" style="display:none">
+
+      <!-- Stats -->
+      <div class="stats" id="statsBar"></div>
+
+      <div class="divider"></div>
+
+      <!-- Item tabs -->
+      <div class="item-tabs" id="itemTabs"></div>
+
+      <!-- View toggle -->
+      <div class="view-bar">
+        <button class="view-btn active" data-view="cards">بطاقات</button>
+        <button class="view-btn" data-view="json">JSON</button>
+        <button class="view-btn" data-view="table">جدول</button>
+      </div>
+
+      <!-- Cards view -->
+      <div id="viewCards">
+        <div class="branches-grid" id="branchesGrid"></div>
+      </div>
+
+      <!-- JSON view -->
+      <div id="viewJson" style="display:none">
+        <pre id="jsonOut"></pre>
+      </div>
+      <!-- Table view -->
+      <div id="viewTable" style="display:none">
+        <div class="export-bar">
+          <button class="btn-export" id="btnExcel">⬇ تحميل Excel</button>
+          <button class="btn-export" id="btnPdf">🖨️ تصدير PDF</button>
+        </div>
+        <div id="flatTableWrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- عنصر مخفي لاختيار صورة المادة -->
+  <input type="file" id="imgFileInput" accept="image/*" style="display:none">
+  <!-- عنصر مخفي لاختيار لون خلفية سطر الملاحظة -->
+  <input type="color" id="noteColorInput" style="display:none">
+
+  <script>
+    // ── دالة groupByCode (مضمّنة) ─────────────────────────────
+    function groupByCode(rows) {
+      const indexMap = new Map();
+      const result = [];
+      for (const row of rows) {
+        const code = row.code;
+        if (!indexMap.has(code)) { indexMap.set(code, result.length); result.push([]); }
+        result[indexMap.get(code)].push(row);
+      }
+      return result;
+    }
+
+    // ── State ─────────────────────────────────────────────────
+    let analysisResult = [];   // خرج analyzeData
+    let activeItem = 0;
+    let activeView = 'cards';
+    // فروع تُستثنى من "مجموع كمية الإدخال" فقط (تبقى داخلة في مجموع المبيعات والرصيد)
+    const EXCLUDED_INPUT_BRANCHES = ['Store BR', 'Main Branch', 'ادارة سلطنة عمان', 'STORE'];
+
+    // ── صور المواد (مخزّنة حسب كود المادة) ─────────────────────
+    let itemImages = {};       // { [item.code]: dataURL }
+    let pendingImageCode = null;
+
+    // ── ملاحظات الجدول (سطر أعلى الترويسة وسطر أسفل المجاميع) ──
+    let itemNotes = {};        // { [item.code]: { top:{text,color}, bottom:{text,color} } }
+    let pendingNoteTarget = null; // { code, pos }
+
+    function getNote(code, pos) {
+      if (!itemNotes[code]) {
+        itemNotes[code] = {
+          top: { text: '', color: '#ffffff' },
+          bottom: { text: '', color: '#ffffff' }
+        };
+      }
+      return itemNotes[code][pos];
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function noteRowHtml(item, pos) {
+      const note = getNote(item.code, pos);
+      return `
+  <div class="note-row note-${pos}" data-code="${item.code}" data-pos="${pos}" style="background:${note.color}">
+    <span class="color-dot" data-code="${item.code}" data-pos="${pos}" style="background:${note.color}"></span>
+    <div class="note-text" contenteditable="true" data-code="${item.code}" data-pos="${pos}" data-placeholder="اكتب ملاحظة هنا...">${escapeHtml(note.text)}</div>
+  </div>`;
+    }
+
+    // ── Run ───────────────────────────────────────────────────
+    document.getElementById('btnRun').addEventListener('click', () => {
+      const text = document.getElementById('inputText').value;
+      if (!text.trim()) return;
+
+      resetSteps();
+      try {
+        setStep('s1', 'active');
+        const flat = parseExcelText(text);
+        setStep('s1', 'done');
+
+        setStep('s2', 'active');
+        const groups = groupByCode(flat);
+        setStep('s2', 'done');
+
+        setStep('s3', 'active');
+        const taxPercent = parseFloat(document.getElementById('taxPercentInput').value) || 0;
+        const taxRate = 1 + (taxPercent / 100);
+        analysisResult = analyzeData(groups, taxRate);
+        setStep('s3', 'done');
+
+        activeItem = 0;
+        renderAll();
+      } catch (err) {
+        ['s1', 's2', 's3'].forEach(s => {
+          if (document.getElementById(s).classList.contains('active'))
+            setStep(s, 'error');
+        });
+        showError(err.message);
+      }
+    });
+
+    document.getElementById('btnClear').addEventListener('click', () => {
+      document.getElementById('inputText').value = '';
+      document.getElementById('placeholder').style.display = 'block';
+      document.getElementById('resultSection').style.display = 'none';
+      resetSteps();
+      analysisResult = [];
+    });
+
+    // ── Pipeline steps ────────────────────────────────────────
+    function resetSteps() {
+      ['s1', 's2', 's3'].forEach(id => {
+        const el = document.getElementById(id);
+        el.classList.remove('done', 'active', 'error');
+      });
+    }
+    function setStep(id, state) {
+      const el = document.getElementById(id);
+      el.classList.remove('done', 'active', 'error');
+      el.classList.add(state);
+    }
+
+    // ── View buttons ──────────────────────────────────────────
+    document.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeView = btn.dataset.view;
+        renderView();
+      });
+    });
+
+    // ── Render all ────────────────────────────────────────────
+    function renderAll() {
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('resultSection').style.display = 'block';
+      renderStats();
+      renderItemTabs();
+      renderView();
+    }
+
+    // ── Stats ─────────────────────────────────────────────────
+    function renderStats() {
+      const totalBranches = analysisResult.reduce((s, i) => s + i.branches.length, 0);
+      const totalSales = analysisResult.reduce((s, i) =>
+        s + i.branches.reduce((b, br) => b + br.totalSales, 0), 0);
+      document.getElementById('statsBar').innerHTML = `
+      <div class="stat">المواد <span>${analysisResult.length}</span></div>
+      <div class="stat">إجمالي الفروع <span>${totalBranches}</span></div>
+      <div class="stat">إجمالي المبيعات <span>${totalSales}</span></div>`;
+    }
+
+    // ── Item tabs ─────────────────────────────────────────────
+    function renderItemTabs() {
+      const el = document.getElementById('itemTabs');
+      el.innerHTML = '';
+      analysisResult.forEach((item, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'item-tab' + (i === activeItem ? ' active' : '');
+        btn.textContent = item.code;
+        btn.addEventListener('click', () => {
+          activeItem = i;
+          document.querySelectorAll('.item-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderView();
+        });
+        el.appendChild(btn);
+      });
+    }
+
+    // ── View dispatcher ───────────────────────────────────────
+    function renderView() {
+      document.getElementById('viewCards').style.display = activeView === 'cards' ? 'block' : 'none';
+      document.getElementById('viewJson').style.display = activeView === 'json' ? 'block' : 'none';
+      document.getElementById('viewTable').style.display = activeView === 'table' ? 'block' : 'none'; // ← أضف هذا
+
+      if (activeView === 'cards') renderCards();
+      else if (activeView === 'table') renderTable(); // ← أضف هذا
+      else renderJson();
+    }
+
+    // ── Cards view ────────────────────────────────────────────
+    function renderCards() {
+      const item = analysisResult[activeItem];
+      const grid = document.getElementById('branchesGrid');
+      grid.innerHTML = '';
+
+      item.branches.forEach(branch => {
+        // sales table rows
+        let salesHtml = '';
+        if (branch.sales.length === 0) {
+          salesHtml = '<p class="no-sales">لا توجد مبيعات</p>';
+        } else {
+          // <td>${s.price.toFixed(2)}</td>
+          const rows = branch.sales.map(s => `
+          <tr>
+            <td>${s.priceWithTax}</td>
+            <td>${s.numSales}</td>
+            <td>${s.dateLastSale}</td>
+          </tr>`).join('');
+          salesHtml = `
+          <table class="sales-table">
+            <thead>
+              <tr>
+                <th>السعر</th>
+                <th>عدد المبيعات</th>
+                <th>آخر مبيع</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+        }
+
+        const balClass = branch.balance > 0 ? 'bal-pos' : 'bal-zero';
+
+        const card = document.createElement('div');
+        card.className = 'branch-card';
+        card.innerHTML = `
+        <div class="branch-header">
+          <span>${branch.nameBranch}</span>
+          <span class="badge">مبيعات: ${branch.totalSales}</span>
+        </div>
+        <div class="branch-body">
+          <div class="meta-row">
+            <div class="meta-item">
+              أول إدخال
+              <strong>${branch.firstInput ?? '—'}</strong>
+            </div>
+            <div class="meta-item">
+              الرصيد الحالي
+              <strong class="${balClass}">${branch.balance}</strong>
+            </div>
+          </div>
+          <div class="sales-title">تفصيل المبيعات</div>
+          ${salesHtml}
+        </div>`;
+        grid.appendChild(card);
+      });
+    }
+
+    // ── JSON view ─────────────────────────────────────────────
+    function renderJson() {
+      document.getElementById('jsonOut').textContent =
+        JSON.stringify(analysisResult[activeItem], null, 2);
+    }
+
+    // ── Error ─────────────────────────────────────────────────
+    function showError(msg) {
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('resultSection').style.display = 'block';
+      document.getElementById('statsBar').innerHTML =
+        `<div class="error-box">⚠️ خطأ: ${msg}</div>`;
+    }
+    // ── بناء بيانات الجدول المسطّح ────────────────────────────────
+    function buildFlatRows(data) {
+      const rows = [];
+      for (const item of data) {
+        let firstRowOfItem = true;
+        for (const branch of item.branches) {
+          const salesList = branch.sales.length > 0 ? branch.sales : [null];
+          let firstRowOfBranch = true;
+          for (const sale of salesList) {
+            rows.push({
+              branch: firstRowOfBranch ? (branch.nameBranch ?? '—') : '',
+              inputQuantity: firstRowOfBranch ? totalInput : '',
+              numSales: sale ? sale.numSales : '',
+              price: sale ? sale.priceWithTax : '',
+              firstInput: firstRowOfBranch ? (branch.firstInput ?? '—') : '',
+              dateLastSale: sale ? sale.dateLastSale : '',
+              _hasBalance: firstRowOfBranch,
+              _balanceVal: branch.balance,
+              balance: branch.balance,
+              notes: firstRowOfBranch ? (branch.notes ?? '') : '',  // ← أضف هذا
+              _branchRowCount: firstRowOfBranch ? branchRowCount : 0,
+              _isFirstOfBranch: firstRowOfBranch,
+
+
+            });
+            firstRowOfBranch = false;
+            firstRowOfItem = false;
+          }
+        }
+      }
+      return rows;
+    }
+    function buildFlatRowsForItem(item) {
+      const rows = [];
+      for (const branch of item.branches) {
+        const salesList = branch.sales.length > 0 ? branch.sales : [null];
+
+        // حساب كمية الإدخال الكلية للفرع
+        const totalInput = (branch.inputRows ?? []).reduce((sum, r) => sum + (r.inputQuantity ?? 0), 0);
+
+        let firstRowOfBranch = true;
+        const branchRowCount = salesList.length; // لحساب rowspan
+
+        for (const sale of salesList) {
+          rows.push({
+            branch: firstRowOfBranch ? (branch.nameBranch ?? '—') : '',
+            inputQuantity: firstRowOfBranch ? totalInput : '',
+            numSales: sale ? sale.numSales : '',
+            price: sale ? sale.priceWithTax : '',
+            firstInput: firstRowOfBranch ? (branch.firstInput ?? '—') : '',
+            dateLastSale: sale ? sale.dateLastSale : '',
+            _hasBalance: firstRowOfBranch,
+            _balanceVal: branch.balance,
+            balance: branch.balance,
+            _branchRowCount: firstRowOfBranch ? branchRowCount : 0,
+            _isFirstOfBranch: firstRowOfBranch,
+            notes: firstRowOfBranch ? (branch.notes ?? '') : '',
+
+          });
+          firstRowOfBranch = false;
+        }
+      }
+      return rows;
+    }
+    // ── رسم الجدول ────────────────────────────────────────────────
+    function renderTable() {
+      let html = '';
+
+      for (const item of analysisResult) {
+        const flatRows = buildFlatRowsForItem(item);
+        const itemRowCount = flatRows.length; // rowspan للمادة والصورة
+
+        // مجاميع المادة — تُحسب من item.branches مباشرة لتفادي تكرار الرصيد/الإدخال
+        // بسبب rowspan (كل فرع له صف واحد فقط في هذه المجاميع، بعكس صفوف المبيعات المتكررة)
+        const totalBalance = item.branches.reduce((sum, b) => sum + (b.balance ?? 0), 0);
+        const totalInputQty = item.branches
+          .filter(b => !EXCLUDED_INPUT_BRANCHES.includes(b.nameBranch))
+          .reduce((sum, b) =>
+            sum + (b.inputRows ?? []).reduce((s, r) => s + (r.inputQuantity ?? 0), 0), 0);
+        const totalSalesQty = item.branches.reduce((sum, b) => sum + (b.totalSales ?? 0), 0);
+
+        let bodyHtml = '';
+        let isFirstOfItem = true;
+
+        for (const r of flatRows) {
+          const balClass = r._hasBalance
+            ? (r._balanceVal > 0 ? 'bal-pos' : 'bal-zero') : '';
+
+          let rowHtml = '<tr>';
+
+          // عمود صورة المادة — مدموج لكل صفوف المادة
+          if (isFirstOfItem) {
+            const imgSrc = itemImages[item.code];
+            const imgInner = imgSrc
+              ? `<img src="${imgSrc}" class="item-img" alt="${item.code}">`
+              : `<div class="img-placeholder">+</div>`;
+            rowHtml += `<td rowspan="${itemRowCount}" class="img-cell" data-code="${item.code}">
+                      ${imgInner}
+                    </td>`;
+          }
+
+          // عمود المادة — مدموج لكل صفوف المادة
+          if (isFirstOfItem) {
+            rowHtml += `<td rowspan="${itemRowCount}" class="code-cell">${item.code}</td>`;
+          }
+
+          // عمود الفرع — مدموج لصفوف نفس الفرع
+          if (r._isFirstOfBranch) {
+            rowHtml += `<td rowspan="${r._branchRowCount}">${r.branch}</td>`;
+          }
+
+          // عمود كمية الإدخال — مدموج لصفوف نفس الفرع
+          if (r._isFirstOfBranch) {
+            rowHtml += `<td rowspan="${r._branchRowCount}">${r.inputQuantity}</td>`;
+          }
+
+          // الأعمدة غير المدموجة
+          rowHtml += `<td>${r.numSales}</td>`;
+          rowHtml += `<td>${r.price}</td>`;
+          rowHtml += `<td>${r.firstInput}</td>`;
+          rowHtml += `<td>${r.dateLastSale}</td>`;
+
+          // عمود الرصيد — مدموج لصفوف نفس الفرع
+          if (r._isFirstOfBranch) {
+            rowHtml += `<td rowspan="${r._branchRowCount}" class="${balClass}">${r.balance}</td>`;
+          }
+
+          // عمود الملاحظة — مدموج لصفوف نفس الفرع
+          if (r._isFirstOfBranch) {
+            rowHtml += `<td rowspan="${r._branchRowCount}">${r.notes}</td>`;
+
+          }
+
+          rowHtml += '</tr>';
+          bodyHtml += rowHtml;
+          isFirstOfItem = false;
+        }
+
+        // صف المجموع في نهاية جدول المادة
+        bodyHtml += `
+        <tr class="totals-row">
+          <td colspan="3">المجموع</td>
+          <td>${totalInputQty}</td>
+          <td>${totalSalesQty}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td>${totalBalance}</td>
+          <td></td>
+        </tr>`;
+
+        html += `
+      <div class="item-table-wrap">
+        ${noteRowHtml(item, 'top')}
+          <table class="flat-table">
+            <thead>
+              <tr>
+                <th>صورة المادة</th>
+                <th>المادة</th>
+                <th>الفرع</th>
+                <th>كمية الإدخال</th>
+                <th>عدد المبيعات بهذا السعر</th>
+                <th>سعر المبيع</th>
+                <th>تاريخ أول دخول</th>
+                <th>تاريخ آخر مبيع</th>
+                <th>الرصيد</th>
+                <th>ملاحظة</th>
+              </tr>
+            </thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        ${noteRowHtml(item, 'bottom')}
+      </div>`;
+      }
+
+      document.getElementById('flatTableWrap').innerHTML = html;
+    }
+    // ── تحميل Excel (ملف xlsx حقيقي، يتضمن صورة كل مادة داخل عمودها) ────────
+    const IMG_CELL_SIZE_PX = 70; // الحجم المعروض للصورة داخل الخلية (بلا تمديد)
+
+    // ExcelJS يدعم تضمين png / jpeg / gif فقط. أي صيغة أخرى (مثل webp) نحوّلها
+    // تلقائياً إلى png عبر canvas قبل التضمين حتى تظهر بشكل سليم في الملف.
+    function loadImageEl(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    async function toExcelImageData(dataUrl) {
+      if (!dataUrl) return null;
+      const match = /^data:image\/(\w+);base64,/.exec(dataUrl);
+      let ext = match ? match[1].toLowerCase() : '';
+      if (ext === 'jpg') ext = 'jpeg';
+
+      if (['png', 'jpeg', 'gif'].includes(ext)) {
+        return { base64: dataUrl.split(',')[1], extension: ext };
+      }
+
+      const img = await loadImageEl(dataUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      return { base64: canvas.toDataURL('image/png').split(',')[1], extension: 'png' };
+    }
+
+    async function exportToExcel() {
+      const btn = document.getElementById('btnExcel');
+      const originalLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '... جارٍ التصدير';
+
+      try {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('تحليل المبيعات', {
+          views: [{ rightToLeft: true }],
+        });
+
+        const headers = ['صورة المادة', 'المادة', 'الفرع', 'كمية الإدخال',
+          'عدد المبيعات بهذا السعر', 'سعر المبيع',
+          'تاريخ أول دخول', 'تاريخ آخر مبيع', 'الرصيد', 'ملاحظة'];
+
+        sheet.columns = [
+          { width: 12 }, { width: 16 }, { width: 18 }, { width: 12 },
+          { width: 18 }, { width: 12 }, { width: 14 }, { width: 14 },
+          { width: 10 }, { width: 24 },
+        ];
+
+        for (let i = 0; i < analysisResult.length; i++) {
+          const item = analysisResult[i];
+
+          // سطر فارغ بين المواد (ليس قبل الأولى)
+          if (i > 0) sheet.addRow([]);
+
+          // اسم المادة في الخلية الأولى وحدها
+          const titleRow = sheet.addRow([item.code]);
+          titleRow.font = { bold: true };
+
+          // ترويسة الأعمدة
+          const headerRow = sheet.addRow(headers);
+          headerRow.font = { bold: true };
+          headerRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          });
+
+          // صفوف المادة
+          const flatRows = buildFlatRowsForItem(item);
+          const itemRowCount = flatRows.length;
+
+          const totalBalance = item.branches.reduce((sum, b) => sum + (b.balance ?? 0), 0);
+          const totalInputQty = item.branches
+            .filter(b => !EXCLUDED_INPUT_BRANCHES.includes(b.nameBranch))
+            .reduce((sum, b) =>
+              sum + (b.inputRows ?? []).reduce((s, r) => s + (r.inputQuantity ?? 0), 0), 0);
+          const totalSalesQty = item.branches.reduce((sum, b) => sum + (b.totalSales ?? 0), 0);
+
+          let isFirstOfItem = true;
+          let branchStartRow = null;
+          let firstDataRowNumber = null;
+          let lastDataRowNumber = null;
+
+          for (const r of flatRows) {
+            const row = sheet.addRow([
+              '', // عمود الصورة — يُملأ كصورة مضمّنة بعد إتمام كل صفوف المادة
+              isFirstOfItem ? item.code : '',
+              r.branch,
+              r._isFirstOfBranch ? r.inputQuantity : '',
+              r.numSales,
+              r.price,
+              r.firstInput,
+              r.dateLastSale,
+              r._hasBalance ? r.balance : '',
+              r._isFirstOfBranch ? (r.notes ?? '') : '',
+            ]);
+            row.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+            if (firstDataRowNumber === null) firstDataRowNumber = row.number;
+            lastDataRowNumber = row.number;
+
+            if (r._isFirstOfBranch) branchStartRow = row.number;
+            if (r._branchRowCount > 1) {
+              const branchEndRow = branchStartRow + r._branchRowCount - 1;
+              ['C', 'D', 'I', 'J'].forEach(col => {
+                sheet.mergeCells(`${col}${branchStartRow}:${col}${branchEndRow}`);
+              });
+            }
+
+            isFirstOfItem = false;
+          }
+
+          // دمج عمودي الصورة والمادة على طول كل صفوف المادة (مثل rowspan في الموقع)
+          if (itemRowCount > 1) {
+            sheet.mergeCells(`A${firstDataRowNumber}:A${lastDataRowNumber}`);
+            sheet.mergeCells(`B${firstDataRowNumber}:B${lastDataRowNumber}`);
+          }
+
+          // تضمين صورة المادة (إن وُجدت) داخل الخلية المدموجة
+          try {
+            const imgData = await toExcelImageData(itemImages[item.code]);
+            if (imgData) {
+              const imageId = workbook.addImage(imgData);
+              sheet.addImage(imageId, {
+                tl: { col: 0, row: firstDataRowNumber - 1 },
+                ext: { width: IMG_CELL_SIZE_PX, height: IMG_CELL_SIZE_PX },
+              });
+
+              // إن كانت صفوف المادة قليلة، نرفع ارتفاعها لتتّسع للصورة بلا تمديد
+              const DEFAULT_ROW_PX = 20;
+              if (itemRowCount * DEFAULT_ROW_PX < IMG_CELL_SIZE_PX) {
+                const neededPerRowPt = (IMG_CELL_SIZE_PX / itemRowCount) * 0.75; // px → pt
+                for (let rn = firstDataRowNumber; rn <= lastDataRowNumber; rn++) {
+                  sheet.getRow(rn).height = neededPerRowPt;
+                }
+              }
+            }
+          } catch (imgErr) {
+            console.warn('تعذّر تضمين صورة المادة', item.code, imgErr);
+          }
+
+          // صف المجموع
+          const totalsRow = sheet.addRow(['المجموع', '', '', totalInputQty, totalSalesQty, '', '', '', totalBalance, '']);
+          totalsRow.font = { bold: true };
+          totalsRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F3F3' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          });
+          sheet.mergeCells(`A${totalsRow.number}:C${totalsRow.number}`);
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'تحليل_المبيعات.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+
+      } catch (err) {
+        console.error('Excel export failed:', err);
+        alert('حدث خطأ أثناء تصدير Excel:\n' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    }
+
+    document.getElementById('btnExcel').addEventListener('click', exportToExcel);
+
+    // ── إضافة/تغيير صورة المادة ────────────────────────────────
+    // نقر على خلية الصورة (سواء كانت "+" أو صورة موجودة) يفتح منتقي الملفات
+    document.getElementById('flatTableWrap').addEventListener('click', (e) => {
+      const cell = e.target.closest('.img-cell');
+      if (!cell) return;
+      pendingImageCode = cell.dataset.code;
+      document.getElementById('imgFileInput').click();
+    });
+
+    document.getElementById('imgFileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      e.target.value = ''; // يسمح باختيار نفس الملف مرة أخرى لاحقًا
+      if (!file || !pendingImageCode) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        itemImages[pendingImageCode] = ev.target.result; // تخزين كـ data URL
+        pendingImageCode = null;
+        renderTable(); // إعادة رسم الجدول لإظهار الصورة الجديدة
+      };
+      reader.readAsDataURL(file);
+    });
+    // ── سطرا الملاحظة (أعلى الترويسة وأسفل المجاميع) ───────────
+    document.getElementById('flatTableWrap').addEventListener('input', (e) => {
+      const el = e.target.closest('.note-text');
+      if (!el) return;
+      const note = getNote(el.dataset.code, el.dataset.pos);
+      note.text = el.textContent;
+    });
+
+    document.getElementById('flatTableWrap').addEventListener('click', (e) => {
+      const dot = e.target.closest('.color-dot');
+      if (!dot) return;
+      pendingNoteTarget = { code: dot.dataset.code, pos: dot.dataset.pos };
+      const note = getNote(pendingNoteTarget.code, pendingNoteTarget.pos);
+      const colorInput = document.getElementById('noteColorInput');
+      colorInput.value = note.color;
+      colorInput.click();
+    });
+
+    document.getElementById('noteColorInput').addEventListener('input', (e) => {
+      if (!pendingNoteTarget) return;
+      const note = getNote(pendingNoteTarget.code, pendingNoteTarget.pos);
+      note.color = e.target.value;
+
+      const row = document.querySelector(
+        `.note-row[data-code="${pendingNoteTarget.code}"][data-pos="${pendingNoteTarget.pos}"]`
+      );
+      if (row) row.style.background = note.color;
+
+      const dot = document.querySelector(
+        `.color-dot[data-code="${pendingNoteTarget.code}"][data-pos="${pendingNoteTarget.pos}"]`
+      );
+      if (dot) dot.style.background = note.color;
+    });
+  </script>
+
+  <!-- منطق تصدير PDF (مستقل في ملف خاص) -->
+  <script src="pdfExport.js"></script>
+</body>
+
+</html>
