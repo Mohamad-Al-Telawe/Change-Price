@@ -11,8 +11,8 @@ export const useAuthStore = defineStore('auth', {
     role: (state) => state.user?.role || null,
   },
   actions: {
-    async login(number) {
-      const response = await apiClient.post('/auth/login', { number });
+    async login({ company, branch, password }) {
+      const response = await apiClient.post('/auth/login', { company, branch, password });
       this.token = response.data.token;
       this.user = response.data.user;
     },

@@ -12,6 +12,7 @@ const searchRoutes = require('./routes/search');
 const materialsRoutes = require('./routes/materials');
 
 const app = express();
+app.set('trust proxy', true);
 app.use(cors());
 app.use('/api/v1/materials', materialsRoutes);
 app.use(express.json());

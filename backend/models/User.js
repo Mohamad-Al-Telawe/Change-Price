@@ -8,7 +8,6 @@ const userSchema = new mongoose.Schema({
   number: {
     type: Number,
     required: true,
-    unique: true
   },
   role: {
     type: String,
@@ -24,5 +23,7 @@ const userSchema = new mongoose.Schema({
     required: true
   }
 });
+
+userSchema.index({ company: 1, branch: 1, number: 1 }, { unique: true });
 
 module.exports = mongoose.model('User', userSchema);
