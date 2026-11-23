@@ -745,7 +745,8 @@ function onImageFileChange(e) {
 }
 
 // ── جلب الصور تلقائياً ─────────────────────────────
-const PHOTO_API_URL = import.meta.env.VITE_PHOTO_API_URL || 'http://127.0.0.1:4000/api/v1/material_photo';
+// const PHOTO_API_URL = import.meta.env.VITE_PHOTO_API_URL || 'http://127.0.0.1:4000/api/v1/material_photo';
+
 const fetchingImages = ref(false);
 const imagesMessage = ref('');
 
@@ -758,16 +759,22 @@ function blobToDataUrl(blob) {
   });
 }
 
+// async function fetchMaterialImage(code) {
+//   const res = await fetch(PHOTO_API_URL, {
+//     method: 'POST',
+//     headers: { 'Content-Type': 'application/json' },
+//     body: JSON.stringify({ code }),
+//   });
+//   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+//   const blob = await res.blob();
+//   if (!blob.type.startsWith('image/')) throw new Error('الرد ليس صورة');
+//   return blobToDataUrl(blob);
+// }
+
 async function fetchMaterialImage(code) {
-  const res = await fetch(PHOTO_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  if (!blob.type.startsWith('image/')) throw new Error('الرد ليس صورة');
-  return blobToDataUrl(blob);
+  const res = await apiClient.post('/material_photo', { code }, { responseType: 'blob' });
+  if (!res.data.type?.startsWith('image/')) throw new Error('الرد ليس صورة');
+  return blobToDataUrl(res.data);
 }
 
 async function fetchImages() {

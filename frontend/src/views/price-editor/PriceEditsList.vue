@@ -138,11 +138,11 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
-import axios from 'axios';
+// import axios from 'axios';
 import apiClient from '@/api/client';
 import TopBar from '@/components/TopBar.vue';
 
-const PHOTO_URL = 'http://127.0.0.1:4000/api/v1/material_photo';
+// const PHOTO_URL = 'http://127.0.0.1:4000/api/v1/material_photo';
 
 const companyTabs = [
   { value: 'all', label: 'الكل' },
@@ -191,6 +191,8 @@ function materialCode(item) {
 }
 
 async function loadPhotos(items) {
+  console.log('first item:', JSON.stringify(items[0]));
+
   const queue = [...new Set(items.map(materialCode).filter(Boolean))].filter(
     (code) => !photoRequested.has(code)
   );
@@ -199,8 +201,9 @@ async function loadPhotos(items) {
   const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
     while (queue.length) {
       const code = queue.shift();
+      console.log('material_photo code:', JSON.stringify(code));
       try {
-        const res = await axios.post(PHOTO_URL, { code }, { responseType: 'blob' });
+        const res = await apiClient.post('/material_photo', { code }, { responseType: 'blob' });
         if (res.data?.size && String(res.data.type).startsWith('image/')) {
           photoUrls[code] = URL.createObjectURL(res.data);
         }

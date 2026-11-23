@@ -209,11 +209,11 @@ import LanguageToggle from '@/components/LanguageToggle.vue';
 /* ------------------------------------------------------------------ */
 
 // Accounting API used only to verify the material name.
-const MATERIAL_API_BASE = import.meta.env.VITE_MATERIAL_API_URL || 'http://127.0.0.1:4000';
+// const MATERIAL_API_BASE = import.meta.env.VITE_MATERIAL_API_URL || 'http://127.0.0.1:4000';
 const COMPANY = 'UAE';
 
 // Endpoint that returns the material photo (POST {"code": "<material code>"}).
-const PHOTO_URL = `${MATERIAL_API_BASE}/api/v1/material_photo`;
+// const PHOTO_URL = `${MATERIAL_API_BASE}/api/v1/material_photo`;
 
 // Sending is allowed only on this weekday (0 = Sunday ... 1 = Monday ... 6 = Saturday).
 const SEND_DAY = 1;
@@ -243,7 +243,8 @@ const msgs = {
     sendAll: 'إرسال الكل',
     removeDraft: 'حذف المسودة',
     nameRequired: 'اكتب اسم المادة أولاً',
-    notFound: 'اسم المادة خاطئ وغير موجود في {company}',
+    notFound: 'اسم المادة خاطئ وغير موجود',
+    // notFound: 'اسم المادة خاطئ وغير موجود في {company}',
     verifyFailed: 'تعذر التحقق من الاسم',
     verifyUnreachable: 'تعذر الاتصال بخدمة التحقق',
     needVerify: 'يجب تأكيد الاسم قبل الإرسال',
@@ -268,7 +269,8 @@ const msgs = {
     sendAll: 'Send all',
     removeDraft: 'Delete draft',
     nameRequired: 'Enter the material name first',
-    notFound: 'This material does not exist in {company}',
+    // notFound: 'This material does not exist in {company}',
+    notFound: 'This material does not exist',
     verifyFailed: 'Could not verify the name',
     verifyUnreachable: 'Could not reach the verification service',
     needVerify: 'Verify the name before sending',
@@ -439,7 +441,6 @@ function onMaterialInput(d, value) {
 
 async function verifyDraft(d) {
   if (d.verifying || d.sending) return;
-  // if (auto && (d.verified || !d.material.trim())) return;
 
   d.error = '';
 
@@ -451,40 +452,27 @@ async function verifyDraft(d) {
 
   d.verifying = true;
   try {
-    const res = await fetch(`${MATERIAL_API_BASE}/api/v1/material/check`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ material: name, company: COMPANY }),
-    });
-
-    let data = null;
-    try {
-      data = await res.json();
-    } catch {
-      /* non-JSON response */
-    }
+    const res = await apiClient.get('/materials/check', { params: { code: name } });
+    const data = res.data;
 
     // The user edited the name while the request was in flight: drop this result.
     if (d.material.trim() !== name) return;
 
-    if (!res.ok) {
-      d.verified = false;
-      d.error = data?.error || data?.message || tt('verifyFailed');
-      return;
-    }
-
     if (data?.exists === true && data.material?.code) {
       d.material = data.material.code; // fixes upper/lower case
-      d.aname = data.material.aname ?? '';
+      d.aname = '';
       d.verified = true;
     } else {
       d.verified = false;
       d.aname = '';
       d.error = tt('notFound', { company: COMPANY });
     }
-  } catch {
+  } catch (err) {
     d.verified = false;
-    d.error = tt('verifyUnreachable');
+    d.aname = '';
+    d.error = err.response
+      ? err.response.data?.error || tt('verifyFailed')
+      : tt('verifyUnreachable');
   } finally {
     d.verifying = false;
   }
@@ -512,22 +500,19 @@ async function loadPhoto(code) {
 
   photos[key] = { status: 'loading', url: '' };
   try {
-    const res = await fetch(PHOTO_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: key }),
-    });
-
-    const type = res.headers.get('content-type') || '';
-    if (!res.ok || !type.startsWith('image/')) {
-      photos[key] = { status: 'none', url: '' }; // no photo for this material
+    const res = await apiClient.post('/material_photo', { code: key }, { responseType: 'blob' });
+    const blob = res.data;
+    if (!blob?.size || !String(blob.type).startsWith('image/')) {
+      photos[key] = { status: 'none', url: '' };
       return;
     }
-
-    const blob = await res.blob();
     photos[key] = { status: 'ok', url: URL.createObjectURL(blob) };
-  } catch {
-    delete photos[key]; // service unreachable: allow a retry the next time the code shows up
+  } catch (err) {
+    if (err.response?.status === 404) {
+      photos[key] = { status: 'none', url: '' }; // no photo for this material
+    } else {
+      delete photos[key]; // service error: allow a retry the next time the code shows up
+    }
   }
 }
 

@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "turing-handler-515111-b0",
+  "private_key_id": "388894268b7569b480c332241914dfe452b99b59",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDFqjZB7Z3C82Ul\nsR9e8VxCjFYqKshuKXeloMHySxirUUfbOVQffKuVH/KvhYhCrTxFHHcDPYlFExJ8\n20bMVnP/tHj9fdarwEJX3Z4jtDAI6vz3UgaaU3wFy0qfeKBg8gHAvg8Ys/KdTo8w\nL9jpFj/CN5GZxiwzuoOEd4+d3goXi8Vhk8YoBCvl+hbdZsC3DkydgyF70UEFtcIz\nHadDxiFgWMeHOObUAenxKW4gi4yNQxYSZsfe/0Cokd1J/g1XN8JDdsWB8DgvU2Oq\nYvpZR4Wm1R+4vtoudg0dbo3uOl7+99wGFSeeM/jXyRHXjLtFcEs0SXJfStX66cZC\nIRkSlcPNAgMBAAECggEACdg6PaqoCXvfjR+teSg3VcQq2j/i8PByE+1C0GTsZinu\nuxmRM3eqDXJEi/iwJBv/+ednrdRi60fYJNPmyooN9HQVW5C1jQlodHsmVpv+Kw+J\ne+4ZdvzsWvCFURYSeZZlpacbPHoUsQ0aC60YyU3q01FuGCg0ohRQ9Q6SxOrR+o3Z\nUd9i32/o30SER3n+9kHcbEG65aeLtMzKlDSO1IPdsCzcvitcPZo8keaSjCYi7J0c\nqAHF+IlKQefkOoV9p8VZZE8dNnmhYDDB+H/CDR5wGHOs5Ia110cLqlmPTFQfjt1u\nxDz2vOar/+FUtWioHviH58MDZJB10FB38ZPgX41+wQKBgQD/AoGIOyJWzrb3YXOT\nOtTaZb7sK2XVV7nuXmMqX7Y4dq+kvUfJCaxMibrMUkL76nP1dlBGfBqT7qKKq83p\nh881JiHs3at9Bq8CikeT4HsHjnNnEMv4/TvC+iy/6X+qb9u12vdyCweCnKCQ8nrD\n9sIqJ5v0SWzE+ZuQaYQhecOrQQKBgQDGbrOw1eBEWIldg9+RLneIdZC079pf/GwB\n/sejR9dgiP3Vy524hTQ1rl5xt/SllKtRinNYTshstkCs9uwjiec6CmrjKPYKwoP7\noeAWYnx8HJyEVMv+HUewoG/+ENJSWYTz7qjhrs/L6neE0zDZeWmoUpG9WVU1Hsnu\n7QvrGMkxjQKBgQDBFE+pK0TrvyYvlhyhDDlfhwwQ2ycGap6/yb2BtuhMRijlLd9t\nayKG7P1/eIV5IeJcpxFO3OZuvY9aOYz11btgvZeQNaKDTo0x+isJ3zyn0wazsbcO\ntgYKscsyH4RnMryDK+CQ+6LbFOZJ+R5Uw7/tlQHy66ksVuWfaRT/F6e8QQKBgG6K\nqwWfD/FjFRsIZNo+9Y4KWFPDrnZ8azrtUQ+v7Na1Whro9HMfmYcyHSDipqI7YPjq\n1Pjj4plVKlBwufnOUAawWP01C2PRGq9qbShrMwf89GBv0Lg+XXqS1fDGNDR19C/j\nyyb2OIJTmsNe1z6/eVGwtcmy41nVTg8Q9OvCAgrdAoGBAJQ0jbln2iAR6h6LUfKn\nNapD3LODJSNBj4l3hEKFSjS5GCriCkvLpT9bzSR3067wDHKj4NqZ9ScSw6OyxvWX\nXMdPp4PXqTMCbvYvOxh8oNM2b1C/OZSJZdUvZQMGN8iqtW/QjV8FiTWamfrIjaDe\nlONO+4ykTaas/i4U2YrShetJ\n-----END PRIVATE KEY-----\n",
+  "client_email": "photo-api@turing-handler-515111-b0.iam.gserviceaccount.com",
+  "client_id": "104920857250359583821",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/photo-api%40turing-handler-515111-b0.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

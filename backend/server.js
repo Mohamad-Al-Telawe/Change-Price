@@ -9,9 +9,11 @@ const approvalRoutes = require('./routes/approvals');
 const priceEditRoutes = require('./routes/priceEdits');
 const adminRoutes = require('./routes/admin');
 const searchRoutes = require('./routes/search');
+const materialsRoutes = require('./routes/materials');
 
 const app = express();
 app.use(cors());
+app.use('/api/v1/materials', materialsRoutes);
 app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URI)
@@ -29,6 +31,9 @@ app.use('/api/v1/price-edits', priceEditRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/search', searchRoutes);
 
+const materialPhotoRoutes = require('./routes/materialPhoto');
+// app.use('/api/v1/material_photo', requireAuth, materialPhotoRoutes);
+app.use('/api/v1/material_photo', materialPhotoRoutes);
 // ===== خدمة الـ frontend بعد البناء =====
 const path = require('path');
 const dist = path.join(__dirname, '../frontend/dist');
